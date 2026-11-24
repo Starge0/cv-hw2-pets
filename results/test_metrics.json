@@ -1,0 +1,188 @@
+{
+  "metrics": {
+    "full": {
+      "trainable_params": 1555781,
+      "time_s": 151.2300374280003,
+      "train_acc": 0.9964833759590793,
+      "val_acc": 0.8786231884057971,
+      "test_acc": 0.8192968111201963,
+      "macro_f1": 0.8160974027239951,
+      "lr": 0.0003,
+      "best_epoch": 15
+    },
+    "head": {
+      "trainable_params": 628773,
+      "time_s": 92.03521669899965,
+      "train_acc": 0.9868925831202046,
+      "val_acc": 0.8931159420289855,
+      "test_acc": 0.8588171163804852,
+      "macro_f1": 0.858754361647063,
+      "lr": 0.001,
+      "best_epoch": 15
+    },
+    "logreg": {
+      "trainable_params": 21349,
+      "time_s": 24.746788269001627,
+      "train_acc": 0.9865728900255755,
+      "val_acc": 0.8822463768115942,
+      "test_acc": 0.8571817934041973,
+      "macro_f1": 0.8551637932878163,
+      "hp": 0.01
+    },
+    "linsvm": {
+      "trainable_params": 21349,
+      "time_s": 37.71199123500082,
+      "train_acc": 0.9584398976982097,
+      "val_acc": 0.875,
+      "test_acc": 0.8375579176887435,
+      "macro_f1": 0.8330456893179295,
+      "hp": 0.001
+    },
+    "rf": {
+      "trainable_params": null,
+      "time_s": 16.21535783500076,
+      "train_acc": 1.0,
+      "val_acc": 0.8713768115942029,
+      "test_acc": 0.8233851185609158,
+      "macro_f1": 0.8186468739962373,
+      "hp": 200
+    }
+  },
+  "top_confused": {
+    "full": [
+      [
+        "American Pit Bull Terrier",
+        "American Bulldog",
+        21
+      ],
+      [
+        "Birman",
+        "Ragdoll",
+        21
+      ],
+      [
+        "American Pit Bull Terrier",
+        "Staffordshire Bull Terrier",
+        20
+      ],
+      [
+        "Chihuahua",
+        "Shiba Inu",
+        16
+      ],
+      [
+        "Bengal",
+        "Maine Coon",
+        15
+      ]
+    ],
+    "head": [
+      [
+        "American Pit Bull Terrier",
+        "Staffordshire Bull Terrier",
+        23
+      ],
+      [
+        "Ragdoll",
+        "Birman",
+        18
+      ],
+      [
+        "English Setter",
+        "English Cocker Spaniel",
+        15
+      ],
+      [
+        "American Pit Bull Terrier",
+        "American Bulldog",
+        15
+      ],
+      [
+        "Bengal",
+        "Maine Coon",
+        14
+      ]
+    ],
+    "logreg": [
+      [
+        "American Pit Bull Terrier",
+        "Staffordshire Bull Terrier",
+        19
+      ],
+      [
+        "Birman",
+        "Ragdoll",
+        16
+      ],
+      [
+        "Ragdoll",
+        "Birman",
+        13
+      ],
+      [
+        "American Pit Bull Terrier",
+        "American Bulldog",
+        13
+      ],
+      [
+        "Maine Coon",
+        "Bengal",
+        13
+      ]
+    ],
+    "linsvm": [
+      [
+        "Ragdoll",
+        "Birman",
+        24
+      ],
+      [
+        "American Pit Bull Terrier",
+        "American Bulldog",
+        19
+      ],
+      [
+        "American Pit Bull Terrier",
+        "Staffordshire Bull Terrier",
+        15
+      ],
+      [
+        "Chihuahua",
+        "Shiba Inu",
+        15
+      ],
+      [
+        "Staffordshire Bull Terrier",
+        "American Bulldog",
+        14
+      ]
+    ],
+    "rf": [
+      [
+        "American Pit Bull Terrier",
+        "American Bulldog",
+        20
+      ],
+      [
+        "Birman",
+        "Ragdoll",
+        18
+      ],
+      [
+        "Chihuahua",
+        "Shiba Inu",
+        17
+      ],
+      [
+        "Ragdoll",
+        "Birman",
+        17
+      ],
+      [
+        "American Pit Bull Terrier",
+        "Staffordshire Bull Terrier",
+        15
+      ]
+    ]
+  }
+}
