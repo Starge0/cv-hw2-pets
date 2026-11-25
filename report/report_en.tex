@@ -1,0 +1,225 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{graphicx,booktabs,hyperref,amsmath,array}
+\usepackage{float}
+\usepackage{caption}
+\graphicspath{{figures/}{./}}
+
+\newcommand{\gpuinfo}{NVIDIA GeForce RTX 5050 Laptop GPU (driver 610.91)}
+
+\title{Homework 2: Image Classification with Transfer Learning}
+\author{BOIZI ATTOBRA METICO}
+\date{Computer Vision, Fall 2026}
+
+\begin{document}
+\maketitle
+
+Repository: \url{https://github.com/Starge0/cv-hw2-pets}
+
+% ---------------------------------------------------------------
+\section{Data}
+
+We use the \textbf{Oxford-IIIT Pet} dataset \cite{parkhi2012}
+(\url{https://www.robots.ox.ac.uk/~vgg/data/pets/}), which contains images of 37 cat and dog
+breeds. It is distributed by its authors for commercial and research use under the
+\emph{Creative Commons Attribution-ShareAlike 4.0 International} license (CC BY-SA 4.0); the
+copyright of the images remains with their original owners. The 37 breeds are the target
+classes (not the binary cat/dog label). The dataset is not included in the repository because
+of its size (about 800\,MB): it is downloaded automatically with
+\texttt{torchvision.datasets.OxfordIIITPet(download=True)}, as described in the README.
+
+\paragraph{Splits.} We use the official \texttt{trainval} (3680 images) and \texttt{test}
+(3669 images) partitions. \texttt{trainval} is split into training (3128) and validation (552)
+sets, i.e.\ 85/15, stratified by breed (seed 42). The official test set is kept separate:
+\textbf{the test set was not used for early stopping, feature selection, threshold selection
+or hyperparameter tuning}, nor to select checkpoints or classifiers; each final model was
+evaluated on it exactly once. The split is stored in \texttt{splits/split.json}.
+
+\paragraph{Class counts.} Table~\ref{tab:counts} reports the number of images per breed in each
+split: 79--85 in training, 14--15 in validation and 88--100 in test. The dataset is nearly
+balanced, so no class weighting or resampling was applied, and accuracy and macro F1 are
+expected to be very similar. The same counts are in \texttt{results/counts.json}.
+
+\input{counts_table.tex}
+
+\paragraph{Preprocessing and augmentation.} For validation and test we apply the preprocessing
+associated with the pretrained weights: resize to 256, center crop to 224, ImageNet
+normalization. Only the training set receives augmentation: RandomResizedCrop(224, scale
+0.7--1), horizontal flip and ColorJitter(0.2).
+
+% ---------------------------------------------------------------
+\section{Methods}
+
+\paragraph{Architecture and environment.} We use TorchVision's MobileNetV3-Small with weights
+\texttt{MobileNet\_V3\_\allowbreak Small\_\allowbreak Weights.DEFAULT} (ImageNet-1K)
+\cite{howard2019}. Versions: Python 3.12, PyTorch 2.15.0+cu132, TorchVision 0.29.2,
+scikit-learn 1.9.1. The classifier is \texttt{Linear(576,1024)} $\to$ Hardswish $\to$ Dropout
+$\to$ \texttt{Linear(1024,1000)}; the last layer is replaced with \texttt{Linear(1024,37)}.
+Data, splits, preprocessing and metrics are identical across the three approaches.
+
+\paragraph{1. Full fine-tuning.} All parameters are trainable (1\,555\,781).
+
+\paragraph{2. Classifier-head training.} The \texttt{features} block is frozen, with BatchNorm
+in eval mode during training. Trainable layers are \texttt{classifier[0]}
+(Linear $576\to1024$, 590\,848 parameters) and \texttt{classifier[3]}
+(Linear $1024\to37$, 37\,925 parameters), 628\,773 in total.
+
+\paragraph{3. Feature extraction + traditional classifier.} With the network frozen, we extract
+the 576-dimensional vector after the average pooling (before the classifier), without
+augmentation. A \texttt{StandardScaler} fitted \emph{only} on the training features is
+followed by Logistic Regression, LinearSVC or Random Forest. No dimensionality reduction was used.
+
+\paragraph{Training setup.} Networks: cross-entropy loss, AdamW (weight decay $10^{-4}$), batch
+size 64, 15 epochs, checkpoint with the best validation accuracy. The learning rate was chosen
+on the validation set among $\{10^{-4}, 3\cdot10^{-4}\}$ (Full) and
+$\{10^{-3}, 3\cdot10^{-3}\}$ (Head). scikit-learn: $C\in\{0.01,0.1,1,10\}$ (LogReg),
+$C\in\{0.001,0.01,0.1,1\}$ (LinearSVC), 200 or 500 trees (RF), chosen on the validation set.
+
+\paragraph{Selected configurations (on validation).} Full: lr $3\cdot10^{-4}$ (val 0.879 vs.\
+0.859 for $10^{-4}$), best epoch 15. Head: lr $10^{-3}$ (val 0.893 vs.\ 0.870 for
+$3\cdot10^{-3}$), best epoch 15. LogReg $C=0.01$, LinearSVC $C=0.001$, Random Forest with
+200 trees.
+
+\paragraph{Reproducibility.} Seed 42 for Python, NumPy and PyTorch;
+\texttt{cudnn.deterministic=True}, \texttt{benchmark=False} and
+\texttt{use\_deterministic\_algorithms(True, warn\_only=True)}. Two identical runs produced
+the same values epoch by epoch; only the running time changes. Remaining possible sources of
+variation are non-deterministic GPU kernels and driver/library versions. Seeds 1 and 2 were
+also run for the networks with fixed hyperparameters. Machine: \gpuinfo, WSL2 Ubuntu.
+
+\paragraph{Selected checkpoints and commands.} Full FT:
+\texttt{results/\allowbreak full\_\allowbreak lr0.0003\_\allowbreak s42\_\allowbreak best.pt};
+Head: \texttt{results/\allowbreak head\_\allowbreak lr0.001\_\allowbreak s42\_\allowbreak best.pt}
+(both at epoch 15, both in the repository). scikit-learn classifiers are refitted on the
+extracted features (\texttt{results/features.npz}, regenerable) with the hyperparameters in
+\texttt{results/\allowbreak features\_\allowbreak selection.json}; training histories are in
+\texttt{results/*\_train.json}. Versions, dependencies, dataset instructions and the commands
+to run all three approaches and regenerate every metric and figure are in the repository
+\texttt{README.md}.
+
+% ---------------------------------------------------------------
+\section{Results}
+
+Table~\ref{tab:results} reports test results, each model evaluated once with the checkpoint
+and hyperparameters selected on the validation set. For Full FT and Head, test accuracy and
+macro F1 are mean $\pm$ standard deviation over 3 seeds (42, 1, 2); train, validation and
+time refer to seed 42. scikit-learn methods are deterministic on the extracted features and
+have a single value.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Method & Trainable params & Time (s) & Train$^{\dagger}$ & Val & Test acc. & Macro F1 \\
+\midrule
+Full FT ($3\!\cdot\!10^{-4}$) & 1\,555\,781 & 151 & 0.997 & 0.879 & $0.821\pm0.002$ & $0.819\pm0.002$ \\
+Head ($10^{-3}$)              &   628\,773 &  92 & 0.987 & 0.893 & $0.858\pm0.001$ & $0.858\pm0.001$ \\
+\midrule
+Feat.\ + LogReg               &    21\,349 & 14.5 + 10.3 & 0.987$^{*}$ & 0.882 & 0.857 & 0.855 \\
+Feat.\ + LinearSVC            &    21\,349 & 14.5 + 23.2 & 0.958$^{*}$ & 0.875 & 0.838 & 0.833 \\
+Feat.\ + Random Forest        & n/a        & 14.5 + 1.7  & 1.000$^{*}$ & 0.871 & 0.823 & 0.819 \\
+\bottomrule
+\end{tabular}
+\caption{Results on Oxford-IIIT Pet (37 classes). Test: mean $\pm$ std.\ over 3 seeds for Full
+FT and Head; single value for scikit-learn. Time: for the networks, 15 training epochs including
+validation after each epoch; for scikit-learn, \emph{feature extraction + fit}
+(totals 24.8, 37.7 and 16.2\,s). Parameters of LogReg and LinearSVC: $576\cdot37+37$.
+$^{\dagger}$ Network train accuracy is the running average over the epoch \emph{with}
+augmentation and dropout active. $^{*}$ scikit-learn train accuracy is computed on extracted
+features \emph{without} augmentation, with the final model: it is not comparable with the
+network values, so train--test gaps across the two families should be read with caution.
+Hardware: \gpuinfo, CUDA 13.2 (PyTorch build \texttt{cu132}), WSL2 Ubuntu; times are specific
+to this machine.}
+\label{tab:results}
+\end{table}
+
+\paragraph{Variability.} Logistic Regression, LinearSVC and Random Forest (fixed
+\texttt{random\_state}) are deterministic given the split and the extracted features (frozen
+network, no augmentation): repeating with other seeds would give the same values, so their
+variability \emph{cannot} be estimated with a single split. The standard deviations of Full FT
+and Head reflect only the training seed (initialization of the new layer, dropout,
+augmentation, batch order), not the choice of split. With 3 seeds the estimate is rough.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.45\linewidth]{cm_head.png}
+\includegraphics[width=.45\linewidth]{cm_full.png}
+\caption{Confusion matrices on the test set (row-normalized, with class names): Head (left)
+and Full FT (right), seed 42. For space reasons the PDF shows these two, the extremes of
+network performance; the matrices of LogReg, LinearSVC and Random Forest, with the same axes,
+are in \texttt{results/cm\_logreg.png}, \texttt{cm\_linsvm.png} and \texttt{cm\_rf.png} in the
+repository.}
+\label{fig:cm}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.62\linewidth]{examples_confused_head.png}
+\caption{Head predictions on the test set. Top row (red): one error for each of the model's
+three most confused true$\to$predicted pairs; bottom row (green): a correct prediction of the
+same true class. Each example is the first match in test-set order, with no manual selection.
+The same figure for Full FT and the first six correct and incorrect predictions in dataset
+order are in \texttt{results/}.}
+\label{fig:examples}
+\end{figure}
+
+% ---------------------------------------------------------------
+\section{Discussion}
+
+\paragraph{Performance.} Head and Full FT differ by about 3.6 accuracy points (0.858 vs.\
+0.821, roughly 130 images out of 3669), much more than the seed-to-seed variability (standard
+deviation $\le 0.2$ points). In our setup the Head is therefore better than Full FT; however,
+this rests on 3 seeds and a small learning-rate grid, so it should not be generalized. Head
+(0.859 with seed 42) and LogReg (0.857) differ by about 6 images; the variability of
+scikit-learn was not measured, so we regard the two as equivalent. LinearSVC and Random Forest
+are 2--3.5 points lower. Accuracy and macro F1 are almost identical, consistent with balanced
+classes.
+
+\paragraph{Overfitting and domain.} Full FT reaches 0.997 training accuracy against 0.821 on
+test (a gap of about 18 points); Head and LogReg have a gap of about 13 points (0.987 vs.\
+0.858 and 0.857). With 3128 images, updating all 1.5\,M parameters leads to memorizing the
+training set. ImageNet-1K already contains many dog and cat breeds, so the pretrained features
+are very well suited to the task and the room for improvement from fine-tuning is small: this
+is a plausible interpretation that we did not verify with dedicated experiments (lower learning
+rate, stronger regularization). The gaps are not measured homogeneously: network training
+accuracy is the running average over the epoch \emph{with} augmentation and dropout active, and
+therefore underestimates their ``clean'' training accuracy (the true gap is likely larger),
+whereas scikit-learn accuracy is computed on features without augmentation. We did not
+re-evaluate the networks on the training set in eval mode, so the comparison of gaps across the
+two families is only indicative. Random Forest has 1.000 training accuracy and memorizes the
+training set. The drop from validation to test is larger for Full FT (0.879 vs.\ 0.821) than for
+Head (0.893 vs.\ 0.858); selecting the maximum over 552 images and several configurations gives
+optimistic estimates. For seed 42 the best checkpoint is the last epoch in both cases (with
+other seeds earlier, e.g.\ epochs 11--13): 15 epochs may be insufficient and training was not
+extended.
+
+\paragraph{Computational cost.} LogReg on frozen features obtains almost the same result as the
+Head in about 25\,s versus 92\,s, training 21\,k parameters instead of 629\,k. Full FT takes
+151\,s and is the least accurate network. Random Forest is the fastest (16\,s) but less
+accurate. Times were measured on a single machine and vary by a few seconds between runs.
+
+\paragraph{Errors.} The most confused classes are visually very similar breeds: American Pit
+Bull Terrier with Staffordshire Bull Terrier and American Bulldog (up to 23 errors), Birman with
+Ragdoll (up to 24), Chihuahua with Shiba Inu, Bengal with Maine Coon, English Setter with
+English Cocker Spaniel. These are distinctions based on fine details of muzzle, coat and colour;
+the quoted counts vary across models.
+
+\paragraph{Limitations.} A single architecture and dataset; small hyperparameter grids (2
+learning rates per approach) and 15 epochs; 3 seeds for the networks but a fixed
+train/validation split, so variability due to the split is not estimated; a validation set of
+only 552 images; scikit-learn evaluated with a single seed; timings on a single GPU.
+
+% ---------------------------------------------------------------
+\begin{thebibliography}{9}
+\bibitem{parkhi2012} O. M. Parkhi, A. Vedaldi, A. Zisserman, C. V. Jawahar.
+\emph{Cats and Dogs}. CVPR 2012. Dataset: \emph{The Oxford-IIIT Pet Dataset},
+\url{https://www.robots.ox.ac.uk/~vgg/data/pets/}, license CC BY-SA 4.0
+(Creative Commons Attribution-ShareAlike 4.0 International).
+\bibitem{howard2019} A. Howard et al. \emph{Searching for MobileNetV3}. ICCV 2019.
+\end{thebibliography}
+\end{document}
